@@ -3,13 +3,15 @@ package main
 import (
     "net/http"
     "encoding/json"
+    "strings"
 )
 type Task struct {
     ID    string `json:"id"`
     Title string `json:"title"`
+    IsCompleted bool `json:"isCompleted"`
 }
 
-var tasks = []Task{} // a simple in-memory store for tasks
+var tasks = []Task{} 
 
 // Make sure that IDs are unique
 func taskExists(id string) bool {
@@ -22,7 +24,7 @@ func taskExists(id string) bool {
 }
 func main() {
     http.HandleFunc("/tasks", tasksHandler)
-    http.HandleFunc("/tasks/", taskHandler)
+    http.HandleFunc("/tasks/", tasksHandler)
     http.ListenAndServe(":8080", nil)
 }
 
@@ -39,11 +41,43 @@ func tasksHandler(w http.ResponseWriter, r *http.Request) {
         }
         tasks = append(tasks, task)
         json.NewEncoder(w).Encode(task)
+
+    case "PUT":
+        updateTask(w, r)
+
+    case "DELETE":
+        deleteTask(w, r)
+
     default:
         w.WriteHeader(http.StatusMethodNotAllowed)
     }
 }
-
-func taskHandler(w http.ResponseWriter, r *http.Request) {
-    // implementation for handling specific task based on ID
+func updateTask(w http.ResponseWriter, r *http.Request) {
+    id := strings.TrimPrefix(r.URL.Path, "/tasks/")
+    var updatedTask Task
+    if err := json.NewDecoder(r.Body).Decode(&updatedTask); err != nil {
+        http.Error(w, "Invalid JSON", http.StatusBadRequest)
+        return
+    }
+    for i, task := range tasks {
+        if task.ID == id {
+            tasks[i].Title = updatedTask.Title
+            tasks[i].IsCompleted = updatedTask.IsCompleted
+            json.NewEncoder(w).Encode(tasks[i])
+            return
+        }
+    }
+    http.Error(w, "Task not found", http.StatusNotFound)
+}
+func deleteTask(w http.ResponseWriter, r *http.Request) {
+    id := strings.TrimPrefix(r.URL.Path, "/tasks/")
+    for i, task := range tasks {
+        if task.ID == id {
+            // tasks is updated and element i is deleted
+            tasks = append(tasks[:i], tasks[i+1:]...)
+            w.WriteHeader(http.StatusOK)
+            return
+        }
+    }
+    http.Error(w, "Task not found", http.StatusNotFound)
 }
